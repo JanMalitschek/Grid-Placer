@@ -1,0 +1,15 @@
+{
+    "name": "jamathan.gridplacer.editor",
+    "references": [
+        "GUID:bf82058fe29448b43b32eab66d5961c0"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
