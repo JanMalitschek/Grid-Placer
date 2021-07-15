@@ -54,3 +54,12 @@ Q | Rotate the selected prefab counterclockwise using **Big Step**
 Q+Shift | Rotate the selected prefab counterclockwise using **Small Step**
 LMB | Place the selected prefab
 LMB+Alt | Sample the height of whatever you clicked on (Requires a collider to work)
+
+# Prefab Palettes
+![Prefab Palette Icon](/Icons/PrefabPalette.png)
+
+Prefab Palettes are a custom asset type which can be used to group prefabs. They can then be dragged into the **Drag Prefabs here** field in the Grid Placer Window to add all prefabs contained in the Prefab Palette to the active palette.
+
+To create a Prefab Palette right click in the Project Browser > Create > GridPlacer > Prefab Palette.
+You will notice that the UI looks very similar to the Prefab Palette UI in the Grid Placer Window.
+You can drag prefabs into the **Drag Prefabs here** field to add them to the Prefab Palette and click on the Prefab thumbnails in the list to remove them.
