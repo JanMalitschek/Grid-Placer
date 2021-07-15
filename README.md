@@ -8,6 +8,8 @@ Open the Package Manager Window, click the little + button in the top left corne
 Make sure to copy the URL from the green Code button instead of taking it from the browser URL field.
 
 # The Grid Placer Window
+In the Toolbar go to Tools > Grid Placer to open the Grid Placer Window. I suggest docking it next to the inspector.
+Said window contains the following settings:
 * **Grid**
   * **Size X** defines the grid cell size on the x-axis.
   * **Size Z** defines the grid cell size on the z-axis.
