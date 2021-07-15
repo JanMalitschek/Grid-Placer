@@ -24,6 +24,7 @@ Make sure to copy the URL from the green Code button instead of taking it from t
   * **Edges** makes the currently selected prefab snap to one of the four edges of the active grid cell.
   * **Corners** makes the currently selected prefab snap to one of the four corners of the active grid cell.
   * **None** disables snapping all together.
+  * The Snap Settings are also displayed in the scene view.
 * **Palette**
   * **Instance Parent** - Assign a scene Transform here to automatically parent all placed prefabs to it.
   * **Drag Prefabs here** to add them to the active prefab palette.
@@ -37,3 +38,19 @@ In the scene view you will notice the Grid Gizmo which is constantly following y
 * The **white lines** display the grid's cell which your cursor is currently pointing at as well as indicate it's neighboring cells.
 * The **green dot** displays your cursors position projected onto the grid. With Snapping disabled it's also the position the selected prefab will be placed at.
 * The **orange dots** display the currently available snapping positions according to the active Snap Setting. The selected prefab will be placed at the orange dot which is closest to the green dot.
+
+# Shortcuts
+Key (In the Scene View) | Action
+----|-------
+1 | Switch to **Center** Snap Mode
+2 | Switch to **Edges** Snap Mode
+3 | Switch to **Corners** Snap Mode
+4 | Disable Snapping
+Scroll | Change **Height** using **Big Step**
+Scroll+Shift | Change **Height** using **Small Step**
+E | Rotate the selected prefab clockwise using **Big Step**
+E+Shift | Rotate the selected prefab clockwise using **Small Step**
+Q | Rotate the selected prefab counterclockwise using **Big Step**
+Q+Shift | Rotate the selected prefab counterclockwise using **Small Step**
+LMB | Place the selected prefab
+LMB+Alt | Sample the height of whatever you clicked on (Requires a collider to work)
