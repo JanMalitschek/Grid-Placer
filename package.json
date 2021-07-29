@@ -1,6 +1,6 @@
 {
   "name": "com.jamathan.gridplacer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Grid Placer",
   "description": "Creating modular, grid-based maps is an absolute pain and extremely time consuming. This tool aims to alleviate this process.",
   "unity": "2020.1",
@@ -12,5 +12,5 @@
     "name": "Jamathan",
     "url": "https://twitter.com/malitschek"
   },
-  "type": "tool"
+  "type": "module"
 }

@@ -225,8 +225,8 @@ namespace GridPlacer{
         
         //In here happens everything scene view related like drawing Handles and scene view overlay GUI
         private void OnSceneGUI(SceneView sceneView) {
-            //If the Grid Placer tool is not selected we want to skip this entire method
-            if(EditorTools.activeToolType != typeof(GridPlacerTool))
+            //If the Grid Placer tool is not selected or the game is playing we want to skip this entire method
+            if(EditorTools.activeToolType != typeof(GridPlacerTool) || Application.isPlaying)
                 return;
             //This prevents the user from selecting things in the scene view
             //This is necessary because we don't want to immediately select objects we've just placed
