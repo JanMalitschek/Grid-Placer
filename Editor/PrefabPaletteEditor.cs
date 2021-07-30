@@ -1,9 +1,10 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 
 #if UNITY_EDITOR
+using UnityEditor;
+
 namespace GridPlacer{
     [CustomEditor(typeof(PrefabPalette))]
     public class PrefabPaletteEditor : Editor {
