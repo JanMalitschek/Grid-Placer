@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
+#if UNITY_EDITOR
 namespace GridPlacer{
     [CustomEditor(typeof(PrefabPalette))]
     public class PrefabPaletteEditor : Editor {
@@ -55,3 +56,4 @@ namespace GridPlacer{
         }
     }
 }
+#endif

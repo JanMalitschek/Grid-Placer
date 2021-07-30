@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.EditorTools;
 
+#if UNITY_EDITOR
 namespace GridPlacer{
     //This is a completely blank tool that is only used to keep track of when the grid placer tool is selected
     //I don't think this is how EditorTools are supposed to be used but I don't care.
@@ -24,3 +25,4 @@ namespace GridPlacer{
         public override GUIContent toolbarIcon => iconContent;
     }
 }
+#endif
