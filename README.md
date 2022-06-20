@@ -11,22 +11,34 @@ Make sure to copy the URL from the green Code button instead of taking it from t
 In the Toolbar go to Tools > Grid Placer to open the Grid Placer Window. I suggest docking it next to the inspector.
 Said window contains the following settings:
 * **Grid**
-  * **Size X** defines the grid cell size on the x-axis.
-  * **Size Z** defines the grid cell size on the z-axis.
-* **Height**
-  * **Height** defines the grid's height on the y-axis.
-  * **Small Step** defines the amount the grid height will change when scrolling while holding down Shift in the scene view.
+  * **Origin** defines where the grid's origin lies. Can be used to offset the grid cells or change their height.
+  * **Rotation** defines how the grid is rotated around the origin.
+  * **Size X** defines the grid cell size on the x-axis with respect to the grid rotation.
+  * **Size Z** defines the grid cell size on the z-axis with respect to the grid rotation.
+* **Height Offset**
+  * **Height** defines the currently selected prefab's height offset perpendicular to the grid.
+  * **Small Step** defines the amount the height offset will change when scrolling while holding down Shift in the scene view.
   * **Big Step** defines the amount the grid height will change when scrolling in the scene view.
 * **Rotation**
-  * **Rotation** defines the currently selected prefab's rotation on the y-axis.
+  * **Rotation** defines the currently selected prefab's rotation around it's local y-axis.
+  * **Randomize** defines if the currently selected prefab's rotation around it's local y-axis should be randomized after each placement.
   * **Small Step** defines the amount the rotation will change when pressing E/Q while holding down Shift in the scene view.
   * **Big Step** defines the amount the rotation will change when pressing E/Q in the scene view.
+* **Scale**
+  * **Scale** defines the currently selected prefab's uniform scale.
+  * **Randomize** defines if the currently selected prefab's uniform scale should be randomized after each placement.
+    * **Min Scale** defines the minimum random uniform scale.
+    * **Min Scale** defines the maximum random uniform scale.
 * **Grid Snapping**
   * **Center** makes the currently selected prefab snap to the center of the active grid cell.
   * **Edges** makes the currently selected prefab snap to one of the four edges of the active grid cell.
   * **Corners** makes the currently selected prefab snap to one of the four corners of the active grid cell.
   * **None** disables snapping all together.
   * The Snap Settings are also displayed in the scene view.
+* **Scene Sampling**
+  * **Sample Height Offset** samples the current height offset relative to the grid.
+  * **Sample Origin Transform** sets the grid origin equal to the sample point and aligns the grid rotation to the sampled normal.
+  * **Sample Prefab** tries to use the sampled object as a prefab to instantiate. Only works on objects that are already an instance of a prefab (no unpacked prefabs).
 * **Palette**
   * **Instance Parent** - Assign a scene Transform here to automatically parent all placed prefabs to it.
   * **Drag Prefabs here** to add them to the active prefab palette.
@@ -40,6 +52,8 @@ In the scene view you will notice the Grid Gizmo which is constantly following y
 * The **white lines** display the grid's cell which your cursor is currently pointing at as well as indicate it's neighboring cells.
 * The **green dot** displays your cursors position projected onto the grid. With Snapping disabled it's also the position the selected prefab will be placed at.
 * The **orange dots** display the currently available snapping positions according to the active Snap Setting. The selected prefab will be placed at the orange dot which is closest to the green dot.
+* The **orange lines** that appear between the grid lines and the snapping positions are a visual indicator of the height offset when using snapping.
+* The **green line** that appears between the projected cursor position and the prefab are a visual indicator of the height offset when using no snapping.
 
 # Shortcuts
 Key (In the Scene View) | Action

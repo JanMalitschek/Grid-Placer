@@ -17,6 +17,13 @@ namespace GridPlacer{
         }
 
         //Grid Settings
+        public Vector3 gridOrigin = Vector3.zero;
+        public Quaternion gridRotation = Quaternion.identity;
+        private Vector3 GridNormal {
+            get{
+                return gridRotation * Vector3.up;
+            }
+        }
         public float gridSizeX = 5.0f, gridSizeZ = 5.0f;
         public float gridHeight = 0.0f;
         public float smallGridHeightStep = 1.0f;
@@ -36,7 +43,26 @@ namespace GridPlacer{
         public int currentRotation = 0;
         public int smallRotationStep = 10;
         public int bigRotationStep = 90;
+        public bool randomizeRotation = false;
 
+        //Scale Settings
+        public float currentScale = 1.0f;
+        public bool randomizeScale = false;
+        public float minScale = 0.9f;
+        public float maxScale = 1.1f;
+
+        //Sampling Settings
+        public int samplingSetting = 0;
+        //List of entries to use in the snapping mode selection grid
+        private string[] samplingSettingsNames = {
+            "Sample Height Offset",
+            "Sample Origin Transform",
+            "Sample Prefab"
+        };
+
+        //Palette Display Settings
+        public string[] paletteDisplayOptions = {"List", "Compact"};
+        public int selectedPaletteDisplayOption = 0;
         //Palette Settings
         public List<GameObject> prefabPalette = new List<GameObject>();
         //The prefab currently selected from the palette
@@ -44,6 +70,7 @@ namespace GridPlacer{
         //The selected prefabs instance used to preview its placement in the scene view
         private GameObject prefabScenePreview = null;
         public Transform instantiationParent = null;
+        public bool parentToHit = false;
         //Scroll position for the palette scroll view
         private Vector2 paletteScrollPosition = Vector2.zero;
 
@@ -55,6 +82,18 @@ namespace GridPlacer{
             GUILayout.Label("Grid", EditorStyles.boldLabel);
             //Indent the settings from the label
             EditorGUI.indentLevel++;
+            gridOrigin = EditorGUILayout.Vector3Field("Origin", gridOrigin);
+            if(GUILayout.Button("Reset Origin")){
+                gridOrigin = Vector3.zero;
+                Repaint();
+            }
+            gridRotation = Quaternion.Euler(EditorGUILayout.Vector3Field("Rotation", gridRotation.eulerAngles));
+            if(GUILayout.Button("Reset Rotation")){
+                gridRotation = Quaternion.identity;
+                Repaint();
+            }
+            if(EditorGUI.EndChangeCheck())
+                UpdatePrefabScenePreviewRotation();
             gridSizeX = EditorGUILayout.FloatField("Size X", gridSizeX);
             gridSizeZ = EditorGUILayout.FloatField("Size Z", gridSizeZ);
             //Reset the indentation so that the next bold label will be drawn normally
@@ -63,7 +102,7 @@ namespace GridPlacer{
             //Height Settings
             //Create some space from the previous settings group
             GUILayout.Space(10);
-            GUILayout.Label("Height", EditorStyles.boldLabel);
+            GUILayout.Label("Height Offset", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
             gridHeight = EditorGUILayout.FloatField("Height", gridHeight);
             //BeginHorizontal so that the following settings will be drawn in the same line
@@ -77,18 +116,50 @@ namespace GridPlacer{
             GUILayout.Space(10);
             GUILayout.Label("Rotation", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
+            EditorGUI.BeginChangeCheck();
             currentRotation = EditorGUILayout.IntSlider("Rotation", currentRotation, 0, 360);
+            randomizeRotation = EditorGUILayout.Toggle("Randomize", randomizeRotation);
+            //Update the scene previews rotation if currentRotation was changed in the editor window
+            if(EditorGUI.EndChangeCheck() && prefabScenePreview)
+                prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
             GUILayout.BeginHorizontal();
             smallRotationStep = EditorGUILayout.IntField("Small Step", smallRotationStep, GUILayout.ExpandWidth(true));
             bigRotationStep = EditorGUILayout.IntField("Big Step", bigRotationStep);
             GUILayout.EndHorizontal();
             EditorGUI.indentLevel--;
 
+            //Scale Settings
+            GUILayout.Space(10);
+            GUILayout.Label("Scale", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUI.BeginChangeCheck();
+            currentScale = EditorGUILayout.Slider("Scale", currentScale, 0.1f, 10.0f);
+            randomizeScale = EditorGUILayout.Toggle("Randomize", randomizeScale);
+            if(randomizeScale){
+                EditorGUI.indentLevel++;
+                minScale = EditorGUILayout.Slider("Min", minScale, 0.1f, 10.0f);
+                maxScale = EditorGUILayout.Slider("Max", maxScale, 0.1f, 10.0f);
+                EditorGUI.indentLevel--;
+            }
+            //Update the scene previews scale if currentScale was changed in the editor window
+            if(EditorGUI.EndChangeCheck() && prefabScenePreview)
+                prefabScenePreview.transform.localScale = Vector3.one * currentScale;
+            EditorGUI.indentLevel--;
+
             //Snap Settings
             GUILayout.Space(10);
             GUILayout.Label("Grid Snapping", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
             //Here we make use of the snapSettingsNames array
             snapSetting = GUILayout.SelectionGrid(snapSetting, snapSettingsNames, 4);
+            EditorGUI.indentLevel--;
+
+            //Sampling Settings
+            GUILayout.Space(10);
+            GUILayout.Label("Scene Sampling", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            samplingSetting = GUILayout.SelectionGrid(samplingSetting, samplingSettingsNames, 3);
+            EditorGUI.indentLevel--;
 
             //Palette Settings
             GUILayout.Space(10);
@@ -99,6 +170,9 @@ namespace GridPlacer{
             //This needs to have allowSceneObjects set to true so that we can use scene objects as the instantiation parent
             //Unity also complains if you don't do this^^
             instantiationParent = (Transform)EditorGUILayout.ObjectField("Instance Parent", instantiationParent, typeof(Transform), true);
+            if(instantiationParent == null)
+                EditorGUILayout.HelpBox("No Instantiation Parent set! Prefabs will be spawned into the scene.", MessageType.Warning, true);
+            parentToHit = EditorGUILayout.Toggle("Parent to Hit", parentToHit);
             //Create the rectangle for the prefab drag area
             Rect paletteRect = GUILayoutUtility.GetRect(0.0f, 50.0f, GUILayout.ExpandWidth(true));
             GUI.Box(paletteRect, "Drag Prefabs here");
@@ -142,55 +216,70 @@ namespace GridPlacer{
                 //When destroying GameObjects from a custom editor or editor window we need to use DestroyImmediate() instead of just Destroy()!
                 DestroyImmediate(prefabScenePreview);
             }
+            selectedPaletteDisplayOption = GUILayout.SelectionGrid(selectedPaletteDisplayOption, paletteDisplayOptions, 2);
             //Begin the palette scroll view
             //This will only appear once there are too many prefabs to fit in the window
             paletteScrollPosition = EditorGUILayout.BeginScrollView(paletteScrollPosition, GUILayout.ExpandHeight(true));
             int prefabIndex = 0;
-            //Iterate through all prefabs in the current palette
-            foreach(GameObject g in prefabPalette){
-                if(g == null)
-                    continue;
-                GUILayout.BeginHorizontal();
-                //AssetPreview.GetAssetPreview() returns the image you would see in the project browser
-                //So for prefabs we get a nice little 3D thumbnail
-                if(GUILayout.Button(AssetPreview.GetAssetPreview(g), GUILayout.Width(50.0f), GUILayout.Height(50.0f))){
-                    //When this button is clicked the corresponding prefab is selected
-                    selectedPrefab = g;
-                    //Destroy the current scene view preview object
-                    if(prefabScenePreview)
-                        DestroyImmediate(prefabScenePreview);
-                    //Then create a new one based on the newly selected prefab
-                    //Instead of using Instantiate() we use PrefabUtility.InstantiatePrefab()
-                    //This maintains the link to the prefab, meaning it has that blue cube icon in the hierarchy and you can click the
-                    //little arrow to edit it.
-                    //Just using Instantiate() would destroy this link - equivalent to unpacking the prefab
-                    prefabScenePreview = (GameObject)PrefabUtility.InstantiatePrefab(g);
-                    //Override it's name - let's be honest, nobody likes the "(Clone)" postfix
-                    prefabScenePreview.name = g.name;
-                    //These hideFlags prevent the preview object from showing up in the hierarchy.
-                    //It also won't be saved if for some reason it stays in the scene view and we lose it's reference
-                    prefabScenePreview.hideFlags = HideFlags.DontSave | HideFlags.HideInHierarchy;
-                    //Everytime we click this button we wan't to switch to the GridPlacerTool
-                    //This makes the transform gizmos disappear
-                    EditorTools.SetActiveTool<GridPlacerTool>();
-                }
-                //If this prefab is selected it's label should be drawn in green
-                if(selectedPrefab == g)
-                    GUI.color = Color.green;
-                EditorGUILayout.LabelField(g.name, EditorStyles.boldLabel);
-                GUI.color = Color.white;
-                if(GUILayout.Button("X")){
-                    //When the remove button is clicked we wan't to remove the corresponding prefab from the palette
-                    if(selectedPrefab == g){
-                        //If this prefab is also the selected prefab we need to remove it's reference and destroy the scene preview
-                        selectedPrefab = null;
-                        DestroyImmediate(prefabScenePreview);
+            //Draw the list display mode
+            if(selectedPaletteDisplayOption == 0){
+                //Iterate through all prefabs in the current palette
+                foreach(GameObject g in prefabPalette){
+                    if(g == null)
+                        continue;
+                    GUILayout.BeginHorizontal();
+                    DrawPaletteAssetPreview(g);
+                    //If this prefab is selected it's label should be drawn in green
+                    if(selectedPrefab == g)
+                        GUI.color = Color.green;
+                    EditorGUILayout.LabelField(g.name, EditorStyles.boldLabel);
+                    GUI.color = Color.white;
+                    if(GUILayout.Button("X")){
+                        //When the remove button is clicked we wan't to remove the corresponding prefab from the palette
+                        if(selectedPrefab == g){
+                            //If this prefab is also the selected prefab we need to remove it's reference and destroy the scene preview
+                            selectedPrefab = null;
+                            DestroyImmediate(prefabScenePreview);
+                        }
+                        prefabPalette.RemoveAt(prefabIndex);
+                        break;
                     }
-                    prefabPalette.RemoveAt(prefabIndex);
-                    break;
+                    GUILayout.EndHorizontal();
+                    prefabIndex++;
                 }
-                GUILayout.EndHorizontal();
-                prefabIndex++;
+            }
+            //Draw the compact display mode
+            else if(selectedPaletteDisplayOption == 1){
+                //When using the compact display mode we need to know how many cells we can fit on one row
+                int maxHorizontalCells = Mathf.FloorToInt((position.width - 25.0f) / 50.0f);
+                int rowCounter = 0;
+                for(int i = 0; i < prefabPalette.Count; i++){
+                    if(rowCounter == 0)
+                        GUILayout.BeginHorizontal();
+                    rowCounter++;
+
+                    GUILayout.BeginVertical();
+                    if(selectedPrefab == prefabPalette[i])
+                        GUI.color = Color.green;
+                    DrawPaletteAssetPreview(prefabPalette[i]);
+                    GUI.color = Color.white;
+                    if(GUILayout.Button("X")){
+                        //When the remove button is clicked we wan't to remove the corresponding prefab from the palette
+                        if(selectedPrefab == prefabPalette[i]){
+                            //If this prefab is also the selected prefab we need to remove it's reference and destroy the scene preview
+                            selectedPrefab = null;
+                            DestroyImmediate(prefabScenePreview);
+                        }
+                        prefabPalette.RemoveAt(i);
+                        break;
+                    }
+                    GUILayout.EndVertical();
+
+                    if(rowCounter >= maxHorizontalCells){
+                        GUILayout.EndHorizontal();
+                        rowCounter = 0;
+                    }
+                }
             }
             EditorGUILayout.EndScrollView();
 
@@ -198,16 +287,51 @@ namespace GridPlacer{
             SwitchSnappingMode();
         }
 
+        void DrawPaletteAssetPreview(GameObject g){
+            //AssetPreview.GetAssetPreview() returns the image you would see in the project browser
+            //So for prefabs we get a nice little 3D thumbnail
+            if(GUILayout.Button(AssetPreview.GetAssetPreview(g), GUILayout.Width(50.0f), GUILayout.Height(50.0f))){
+                SelectPrefab(g);
+            }
+        }
+
+        void SelectPrefab(GameObject g, bool usePrefabInstantiation = true){
+            //When this button is clicked the corresponding prefab is selected
+            selectedPrefab = g;
+            //Destroy the current scene view preview object
+            if(prefabScenePreview)
+                DestroyImmediate(prefabScenePreview);
+            //Then create a new one based on the newly selected prefab
+            //Instead of using Instantiate() we use PrefabUtility.InstantiatePrefab()
+            //This maintains the link to the prefab, meaning it has that blue cube icon in the hierarchy and you can click the
+            //little arrow to edit it.
+            //Just using Instantiate() would destroy this link - equivalent to unpacking the prefab
+            if(usePrefabInstantiation)
+                prefabScenePreview = (GameObject)PrefabUtility.InstantiatePrefab(g);
+            else
+                prefabScenePreview = Instantiate(g);
+            //Override it's name - let's be honest, nobody likes the "(Clone)" postfix
+            prefabScenePreview.name = g.name;
+            //Set the scene previews rotation
+            prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
+            //These hideFlags prevent the preview object from showing up in the hierarchy.
+            //It also won't be saved if for some reason it stays in the scene view and we lose it's reference
+            prefabScenePreview.hideFlags = HideFlags.DontSave | HideFlags.HideInHierarchy;
+            //Everytime we click this button we wan't to switch to the GridPlacerTool
+            //This makes the transform gizmos disappear
+            ToolManager.SetActiveTool<GridPlacerTool>();
+        }
+
         private void OnEnable() {
             //Register a callback that notifies us when the active editor tool was changed
-            EditorTools.activeToolChanged += ToolChanged;
+            ToolManager.activeToolChanged += ToolChanged;
         }
 
         void ToolChanged(){
             //When the active editor Tool is changed to something other than the Grid Placer i.e. the Transform tool
             //we need to destroy the current scene preview object
             //Again using DestroyImmediate() instead of Destroy()
-            if(EditorTools.activeToolType != typeof(GridPlacerTool))
+            if(ToolManager.activeToolType != typeof(GridPlacerTool))
                 DestroyImmediate(prefabScenePreview);
         }
 
@@ -216,19 +340,19 @@ namespace GridPlacer{
             SceneView.duringSceneGui -= OnSceneGUI;
             SceneView.duringSceneGui += OnSceneGUI;
             //And switch to the Grid Placer Tool
-            EditorTools.SetActiveTool<GridPlacerTool>();
+            ToolManager.SetActiveTool<GridPlacerTool>();
         }
 
         private void OnDestroy() {
             //When this window is destroyed, as in closed, we should unregister all callbacks as to not cause any memory leaks
             SceneView.duringSceneGui -= OnSceneGUI;
-            EditorTools.activeToolChanged -= ToolChanged;
+            ToolManager.activeToolChanged -= ToolChanged;
         }
         
         //In here happens everything scene view related like drawing Handles and scene view overlay GUI
         private void OnSceneGUI(SceneView sceneView) {
             //If the Grid Placer tool is not selected or the game is playing we want to skip this entire method
-            if(EditorTools.activeToolType != typeof(GridPlacerTool) || Application.isPlaying)
+            if(ToolManager.activeToolType != typeof(GridPlacerTool) || Application.isPlaying)
                 return;
             //This prevents the user from selecting things in the scene view
             //This is necessary because we don't want to immediately select objects we've just placed
@@ -239,27 +363,30 @@ namespace GridPlacer{
             Ray screenRay = Camera.current.ViewportPointToRay(new Vector3(current.mousePosition.x / Camera.current.pixelWidth,
                                                                 1.0f - current.mousePosition.y / Camera.current.pixelHeight,
                                                                 Camera.current.nearClipPlane));
+            //Draw the Grid Origin
+            Handles.color = new Color(1.0f, 0.0f, 0.0f, 0.5f);
+            Handles.SphereHandleCap(0, gridOrigin, Quaternion.identity, 0.5f, EventType.Repaint);
             //Draw Crosshair
-            //If the ray is exactly parallel to the XZ-plane we don't want to do any of the following calculations as it would result
-            //in divisions by 0
-            if(screenRay.direction.y != 0.0f){
-                //Calculate the position where the camera ray would hit the XZ-Plane at gridHeight
-                Vector3 hitPosition = screenRay.origin - ((screenRay.origin.y - gridHeight) / screenRay.direction.y) * screenRay.direction;
-                Handles.color = new Color(0.5f, 1.0f, 0.0f, 0.5f);
-                //Draw a little sphere at the hitPosition
-                Handles.SphereHandleCap(0, hitPosition, Quaternion.identity, 0.5f, EventType.Repaint);
-                //Calculate the origin point of the grid cell the current hitPosition is inside of
-                //Simply do some rounding
-                Vector3 gridPosition = new Vector3(Mathf.Floor(hitPosition.x / gridSizeX) * gridSizeX, gridHeight, Mathf.Floor(hitPosition.z / gridSizeZ) * gridSizeZ);
-                //Actually draw the grid
-                DrawGridAtPosition(gridPosition, gridSizeX, gridSizeZ);
-                //Set the scene preview object's position to the snap position based on the current snap setting
-                if(prefabScenePreview)
-                    prefabScenePreview.transform.position = GetSnapPosition(hitPosition);
-            }
+            Matrix4x4 gridTransformation = Matrix4x4.TRS(gridOrigin, gridRotation, Vector3.one);
+            Ray transformedScreenRay = TransformRay(screenRay, gridTransformation.inverse);
+            Handles.matrix = gridTransformation;
+            //Calculate the position where the camera ray would hit the XZ-Plane at gridHeight
+            Vector3 hitPosition = transformedScreenRay.origin - ((transformedScreenRay.origin.y) / transformedScreenRay.direction.y) * transformedScreenRay.direction;
+            Handles.color = new Color(0.5f, 1.0f, 0.0f, 0.5f);
+            //Draw a little sphere at the hitPosition
+            Handles.SphereHandleCap(0, hitPosition, Quaternion.identity, 0.5f, EventType.Repaint);
+            //Calculate the origin point of the grid cell the current hitPosition is inside of
+            //Simply do some rounding
+            Vector3 gridPosition = new Vector3(Mathf.Floor(hitPosition.x / gridSizeX) * gridSizeX, 0.0f, Mathf.Floor(hitPosition.z / gridSizeZ) * gridSizeZ);
+            //Actually draw the grid
+            DrawGridAtPosition(gridPosition, hitPosition, gridSizeX, gridSizeZ);
+            Handles.matrix = Matrix4x4.identity;
+            //Set the scene preview object's position to the snap position based on the current snap setting
+            if(prefabScenePreview)
+                prefabScenePreview.transform.position = TransformPoint(GetSnapPosition(hitPosition), gridTransformation);
 
             //Now draw the snap mode selection grid as a scene view overlay
-            GUILayout.BeginArea(new Rect(5, 5, 50, 90));
+            GUILayout.BeginArea(new Rect(5, 5, 60, 90));
             EditorGUI.BeginChangeCheck();
             snapSetting = GUILayout.SelectionGrid(snapSetting, snapSettingsNames, 1);
             //If this selection grid was used this window needs repainting otherwise the two selection grids will appear out of sync
@@ -295,12 +422,32 @@ namespace GridPlacer{
                     //Of course we cannot do that if we don't have anything selected
                     if(!selectedPrefab)
                         return;
+                    //If the user wants the instance to be parented to a potential surface hit we need to retrieve that transform first
+                    //so that the instance doesn't interfere with the Raycast
+                    Transform parent = instantiationParent;
+                    if(parentToHit)
+                        TryGetHitTransform(screenRay, out parent);
                     //We use InstantiatePrefab() again to maintain the prefab link, as explained before
-                    GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(selectedPrefab, instantiationParent);
+                    GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(selectedPrefab, parent);
                     //We simply copy the scene preview object's properties as they are already exactly what we want
                     instance.name = prefabScenePreview.name;
                     instance.transform.position = prefabScenePreview.transform.position;
                     instance.transform.eulerAngles = prefabScenePreview.transform.eulerAngles;
+                    //If the rotation needs to be randomized we change it once a prefab has been instanciated
+                    if(randomizeRotation){
+                        currentRotation = Random.Range(0, 360);
+                        //Make sure to update the scene previews rotation as well
+                        UpdatePrefabScenePreviewRotation();
+                        Repaint();
+                    }
+                    //If the scale needs to be randomized we change it once a prefab has been instanciated
+                    if(randomizeScale){
+                        currentScale = Random.Range(minScale, maxScale);
+                        //Make sure to update the scene previews rotation as well
+                        if(prefabScenePreview)
+                            prefabScenePreview.transform.localScale = Vector3.one * currentScale;
+                        Repaint();
+                    }
                     //Register an object creation undo action so that we can use Ctrl/Cmd+Z to remove misplaced objects
                     Undo.RegisterCreatedObjectUndo(instance, "Place Prefab");
                     //Consume the event
@@ -313,6 +460,17 @@ namespace GridPlacer{
 
             //We need to repaint the scene view every frame else our grid handles won't update their positions
             SceneView.lastActiveSceneView.Repaint();
+        }
+
+        Vector3 TransformPoint(Vector3 point, Matrix4x4 mat){
+            Vector4 transformablePoint = new Vector4(point.x, point.y, point.z, 1.0f);
+            transformablePoint = mat * transformablePoint;
+            return new Vector3(transformablePoint.x, transformablePoint.y, transformablePoint.z);
+        }
+        Ray TransformRay(Ray ray, Matrix4x4 mat){
+            Vector3 origin = TransformPoint(ray.origin, mat);
+            Vector3 direction = TransformPoint(ray.direction + gridOrigin, mat);
+            return new Ray(origin, direction);
         }
 
         //A little helper function to wrap the current rotation
@@ -351,8 +509,13 @@ namespace GridPlacer{
                     Repaint();
                 }
                 //When the rotation settings have been updated we also need to update our scene preview object's rotation
-                if(prefabScenePreview)
-                    prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
+                UpdatePrefabScenePreviewRotation();
+            }
+        }
+        void UpdatePrefabScenePreviewRotation(){
+            if(prefabScenePreview){
+                prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
+                prefabScenePreview.transform.rotation = gridRotation * prefabScenePreview.transform.rotation;
             }
         }
         //This method handles the shortcuts for switching between snapping modes
@@ -385,6 +548,9 @@ namespace GridPlacer{
 
         //This function snaps the raw XZ-plane hit position according to the selected snap settings
         private Vector3 GetSnapPosition(Vector3 gridPosition){
+            //Create grid transformation matrix to account for gridOrigin and gridRotation
+            Matrix4x4 gridTransformation = Matrix4x4.TRS(gridOrigin, gridRotation, Vector3.one);
+            // gridPosition = TransformPoint(gridPosition, gridTransformation.inverse);
             switch(snapSetting){
                 case 0: //Center
                     //For the center position we need to use the same rounding trick to get the current cell origin position
@@ -430,14 +596,14 @@ namespace GridPlacer{
                     gridPosition -= new Vector3(gridSizeX * 0.5f, 0.0f, gridSizeZ * 0.5f);
                     return gridPosition;
                 case 3: //No Snapping
-                    return gridPosition;
+                    return gridPosition + Vector3.up * gridHeight;
             }
-            return gridPosition;
+            return TransformPoint(gridPosition, gridTransformation);
         }
 
         //This function draws the grid and the snapping positions in the scene view
-        private void DrawGridAtPosition(Vector3 origin, float cellSizeX = 5.0f, float cellSizeZ = 5.0f){
-            //First we draw the actual grid
+        private void DrawGridAtPosition(Vector3 origin, Vector3 hitPosition, float cellSizeX = 5.0f, float cellSizeZ = 5.0f){
+            //Draw the actual grid
             Handles.color = new Color(1.0f, 1.0f, 1.0f, 0.5f);
             //Don't really want to explain this... it's pretty straight forward to figure out
             Handles.DrawLine(new Vector3(-cellSizeX, 0.0f, 0.0f) + origin, new Vector3(cellSizeX * 2, 0.0f, 0.0f) + origin);
@@ -448,19 +614,33 @@ namespace GridPlacer{
             //Depending on which snap setting is selected little spheres will be drawn at the snap positions
             switch(snapSetting){
                 case 0: //Center
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, 0.0f, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, gridHeight, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX * 0.5f, 0.0f, cellSizeZ * 0.5f), origin + new Vector3(cellSizeX * 0.5f, gridHeight, cellSizeZ * 0.5f));
                 break;
                 case 1: //Edges
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, 0.0f, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, 0.0f, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, 0.0f, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, 0.0f, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, gridHeight, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX * 0.5f, 0.0f, 0.0f), origin + new Vector3(cellSizeX * 0.5f, gridHeight, 0.0f));
+                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, gridHeight, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(0.0f, 0.0f, cellSizeZ * 0.5f), origin + new Vector3(0.0f, gridHeight, cellSizeZ * 0.5f));
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX * 0.5f, gridHeight, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX * 0.5f, 0.0f, cellSizeZ), origin + new Vector3(cellSizeX * 0.5f, gridHeight, cellSizeZ));
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, gridHeight, cellSizeZ * 0.5f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX, 0.0f, cellSizeZ * 0.5f), origin + new Vector3(cellSizeX, gridHeight, cellSizeZ * 0.5f));
                 break;
                 case 2: //Corners
-                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, 0.0f, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, 0.0f, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, 0.0f, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
-                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, 0.0f, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, gridHeight, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(0.0f, 0.0f, 0.0f), origin + new Vector3(0.0f, gridHeight, 0.0f));
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, gridHeight, 0.0f), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX, 0.0f, 0.0f), origin + new Vector3(cellSizeX, gridHeight, 0.0f));
+                    Handles.SphereHandleCap(0, origin + new Vector3(0.0f, gridHeight, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(0.0f, 0.0f, cellSizeZ),origin + new Vector3(0.0f, gridHeight, cellSizeZ));
+                    Handles.SphereHandleCap(0, origin + new Vector3(cellSizeX, gridHeight, cellSizeZ), Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(origin + new Vector3(cellSizeX, 0.0f, cellSizeZ), origin + new Vector3(cellSizeX, gridHeight, cellSizeZ));
+                break;
+                case 3:
+                    Handles.color = new Color(0.5f, 1.0f, 0.0f, 0.5f);
+                    Handles.SphereHandleCap(0, hitPosition + Vector3.up * gridHeight, Quaternion.identity, 0.5f, EventType.Repaint);
+                    Handles.DrawLine(hitPosition, hitPosition + Vector3.up * gridHeight);
                 break;
             }
         }
@@ -468,8 +648,41 @@ namespace GridPlacer{
         //To sample the scene height we can simply use a Phyics.Raycast call
         //Ofcourse this only works if the object you want to sample has a collider attached to it
         private void SampleHeight(Ray cameraRay){
-            if(Physics.Raycast(cameraRay, out RaycastHit hit, Mathf.Infinity, ~0))
-                gridHeight = hit.point.y;
+            if(Physics.Raycast(cameraRay, out RaycastHit hit, Mathf.Infinity, ~0)){
+                switch(samplingSetting){
+                    case 0: //Sample Height Offset
+                        Vector3 gridToHit = (hit.point - gridOrigin) - Vector3.ProjectOnPlane(hit.point - gridOrigin, GridNormal);
+                        gridHeight = gridToHit.magnitude * Mathf.Sign(Vector3.Dot(GridNormal, gridToHit));
+                        break;
+                    case 1: //Sample Origin Transform
+                        gridOrigin = hit.point;
+                        if(Mathf.Abs(Vector3.Dot(hit.normal, Vector3.forward)) > 0.5)
+                            gridRotation = Quaternion.LookRotation(Vector3.right, hit.normal);    
+                        else
+                            gridRotation = Quaternion.LookRotation(Vector3.forward, hit.normal);
+                        break;
+                    case 2: //Sample Scene Prefab
+                        //Find the first object up the hierarchy that possesses a renderer component
+                        if(hit.transform.TryGetComponent<Renderer>(out Renderer r)){
+                            //Make sure the object is a prefab
+                            GameObject sampledPrefab = (GameObject)PrefabUtility.GetCorrespondingObjectFromSource(r.gameObject);
+                            if(sampledPrefab != null)
+                                SelectPrefab(sampledPrefab);
+                            else
+                                Debug.LogWarning($"{r.gameObject.name} is not a prefab and thus cannot be sampled!");
+                        }
+                        break;
+                }
+            }
+        }
+
+        private bool TryGetHitTransform(Ray cameraRay, out Transform t){
+            if(Physics.Raycast(cameraRay, out RaycastHit hit, Mathf.Infinity, ~0)){
+                t = hit.transform;
+                return true;
+            }
+            t = null;
+            return false;
         }
     }
 }
