@@ -433,6 +433,7 @@ namespace GridPlacer{
                     instance.name = prefabScenePreview.name;
                     instance.transform.position = prefabScenePreview.transform.position;
                     instance.transform.eulerAngles = prefabScenePreview.transform.eulerAngles;
+                    instance.transform.localScale = prefabScenePreview.transform.localScale;
                     //If the rotation needs to be randomized we change it once a prefab has been instanciated
                     if(randomizeRotation){
                         currentRotation = Random.Range(0, 360);
