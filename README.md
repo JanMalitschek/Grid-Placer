@@ -38,13 +38,28 @@ Said window contains the following settings:
 * **Scene Sampling**
   * **Sample Height Offset** samples the current height offset relative to the grid.
   * **Sample Origin Transform** sets the grid origin equal to the sample point and aligns the grid rotation to the sampled normal.
+    * When in **Sample Origin Transform**-mode, some additional options are available
+    * **Sample Position** determines if the grid origin position should be sampled.
+    * **Sample Rotation** determines if the grid origin rotation should be sampled.
+    * **Sample Continuously** determines if the the origin should be sampled automatically at every frame.
   * **Sample Prefab** tries to use the sampled object as a prefab to instantiate. Only works on objects that are already an instance of a prefab (no unpacked prefabs).
+* **Pool**
+  * To place prefabs into the scene, they need to be inside the **Pool**.
+  * This can be just one prefab, or as many as you like. 
+  * When placing the prefabs they will be chosen from the pool randomly. This is very useful for placing different prop variations.
+  * To remove a specific prefab from the **Pool** simply click on it.
+  * **Clear Pool** removes all prefabs from the pool.
 * **Palette**
   * **Instance Parent** - Assign a scene Transform here to automatically parent all placed prefabs to it.
   * **Drag Prefabs here** to add them to the active prefab palette.
-  * **Clear Palette** romves all prefabs from the active palette.
+  * **Clear Palette** removes all prefabs from the active palette.
+  * **Palette Display Mode**
+    * **List** displays the prefabs in a vertical list format showing their thumbnails and names.
+    * **Compact** displays the prefabs in a grid format showing only their thumbnails.
   * All prefabs in the active palette will be listet below
-    * Click the **Prefab Thumbnail** to select it.
+    * Click the **Prefab Thumbnail** to add it to the **Pool**.
+    * Prefabs which are in the **Pool** will marked in green.
+    * Click on a green **Prefab Thumbnail** to remove it from the **Pool**
     * The **X** button removes this prefab from the palette.
 
 # The Scene Gizmos
@@ -68,6 +83,8 @@ E | Rotate the selected prefab clockwise using **Big Step**
 E+Shift | Rotate the selected prefab clockwise using **Small Step**
 Q | Rotate the selected prefab counterclockwise using **Big Step**
 Q+Shift | Rotate the selected prefab counterclockwise using **Small Step**
+R | Cycle through all the prefabs in the **Pool**
+R+Shift | Cycle through all the prefabs in the **Pool** in reverse
 LMB | Place the selected prefab
 LMB+Alt | Sample the height of whatever you clicked on (Requires a collider to work)
 

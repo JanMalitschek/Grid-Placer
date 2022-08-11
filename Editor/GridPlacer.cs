@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-#if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
+// #if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
 using UnityEditor;
 using UnityEditor.EditorTools;
 
@@ -15,6 +15,8 @@ namespace GridPlacer{
             window.titleContent = new GUIContent("Grid Placer", Resources.Load<Texture>(EditorGUIUtility.isProSkin ? "WindowIcon_DarkMode" : "WindowIcon_LightMode"));
             window.Show();
         }
+
+        public Vector2 editorScrollPosition = Vector2.zero;
 
         //Grid Settings
         public Vector3 gridOrigin = Vector3.zero;
@@ -59,14 +61,22 @@ namespace GridPlacer{
             "Sample Origin Transform",
             "Sample Prefab"
         };
+        //Special options for "Sample Origin Transform"
+        //Option for sampling every frame
+        public bool sampleContinuously = false;
+        //Which part of the transform should be sampled?
+        public bool sampleOriginPosition = true;
+        public bool sampleOriginRotation = true;
 
         //Palette Display Settings
         public string[] paletteDisplayOptions = {"List", "Compact"};
         public int selectedPaletteDisplayOption = 0;
         //Palette Settings
         public List<GameObject> prefabPalette = new List<GameObject>();
-        //The prefab currently selected from the palette
-        public GameObject selectedPrefab = null;
+        //Prefab Pool - multiple prefabs may be selected from the palette which show up in the pool
+        //When placing prefabs they will be randomly chosen from the pool
+        public List<GameObject> prefabPool = new List<GameObject>();
+        public int selectedPrefabIdx = 0;
         //The selected prefabs instance used to preview its placement in the scene view
         private GameObject prefabScenePreview = null;
         public Transform instantiationParent = null;
@@ -74,7 +84,34 @@ namespace GridPlacer{
         //Scroll position for the palette scroll view
         private Vector2 paletteScrollPosition = Vector2.zero;
 
+        private void AddToPool(GameObject g){
+            if(prefabPool.Contains(g))
+                return;
+            prefabPool.Add(g);
+            SelectPrefab(g);
+        }
+        private void RemoveFromPool(GameObject g){
+            if(!prefabPool.Contains(g))
+                return;
+            prefabPool.Remove(g);
+            SelectPrefabFromPool();
+        }
+        private void SelectPrefabFromPool(){
+            if(prefabPool.Count == 0)
+                DestroyImmediate(prefabScenePreview);
+            selectedPrefabIdx = Random.Range(0, prefabPool.Count);
+            SelectPrefab(prefabPool[selectedPrefabIdx]);
+        }
+        private void ClearPool(){
+            prefabPool.Clear();
+            DestroyImmediate(prefabScenePreview);
+            selectedPrefabIdx = 0;
+        }
+
         private void OnGUI() {
+            //Encapsulate everything in a scrollView
+            editorScrollPosition = EditorGUILayout.BeginScrollView(editorScrollPosition, GUILayout.ExpandHeight(true));
+
             //Set the global label width to 80px - otherwise field labels will be unnecessarily wide and will expand past the windows width
             EditorGUIUtility.labelWidth = 80;
 
@@ -153,13 +190,59 @@ namespace GridPlacer{
             //Here we make use of the snapSettingsNames array
             snapSetting = GUILayout.SelectionGrid(snapSetting, snapSettingsNames, 4);
             EditorGUI.indentLevel--;
+            if(sampleContinuously && snapSetting != 3)
+                EditorGUILayout.HelpBox("Continuous sampling works best with snapping disabled!", MessageType.Warning, true);
 
             //Sampling Settings
             GUILayout.Space(10);
             GUILayout.Label("Scene Sampling", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
             samplingSetting = GUILayout.SelectionGrid(samplingSetting, samplingSettingsNames, 3);
+            //temporarily increase the label width for the next few settings
+            float currentLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = 150;
+            //only show the following settings when in "Sample Origin Transform" mode
+            if(samplingSetting == 1){
+                sampleOriginPosition = EditorGUILayout.Toggle("Sample Position", sampleOriginPosition);
+                sampleOriginRotation = EditorGUILayout.Toggle("Sample Rotation", sampleOriginRotation);
+                GUILayout.Space(10);
+                sampleContinuously = EditorGUILayout.Toggle("Sample Continuously", sampleContinuously);
+            }
+            EditorGUIUtility.labelWidth = currentLabelWidth;
             EditorGUI.indentLevel--;
+
+            //Pool Settings
+            GUILayout.Space(10);
+            GUILayout.Label("Pool", EditorStyles.boldLabel);
+            //Draw Pool Items
+            {
+                //When using the compact display mode we need to know how many cells we can fit on one row
+                int maxHorizontalCells = Mathf.FloorToInt((position.width - 25.0f) / 50.0f);
+                int rowCounter = 0;
+                for(int i = 0; i < prefabPool.Count; i++){
+                    if(rowCounter == 0)
+                        GUILayout.BeginHorizontal();
+                    rowCounter++;
+
+                    if(GUILayout.Button(AssetPreview.GetAssetPreview(prefabPool[i]), GUILayout.Width(50.0f), GUILayout.Height(50.0f))){
+                        RemoveFromPool(prefabPool[i]);
+                        break;
+                    }
+
+                    if(rowCounter >= maxHorizontalCells){
+                        GUILayout.EndHorizontal();
+                        rowCounter = 0;
+                    }
+                }
+                if(rowCounter != 0)
+                    GUILayout.EndHorizontal();
+            }
+            if(GUILayout.Button("Clear Pool")){
+                prefabPool.Clear();
+                //Since no more prefabs are in the pool we can't display one in the scene either
+                //When destroying GameObjects from a custom editor or editor window we need to use DestroyImmediate() instead of just Destroy()!
+                DestroyImmediate(prefabScenePreview);
+            }
 
             //Palette Settings
             GUILayout.Space(10);
@@ -210,16 +293,13 @@ namespace GridPlacer{
             //Button for clearing the entire palette
             if(GUILayout.Button("Clear Palette")){
                 prefabPalette.Clear();
-                //The selected prefab is gone so we should set the reference to null
-                selectedPrefab = null;
-                //And since no prefab is selected anymore we also need to remove the scene view preview
-                //When destroying GameObjects from a custom editor or editor window we need to use DestroyImmediate() instead of just Destroy()!
-                DestroyImmediate(prefabScenePreview);
+                //The pool needs to be cleared as well
+                ClearPool();
             }
             selectedPaletteDisplayOption = GUILayout.SelectionGrid(selectedPaletteDisplayOption, paletteDisplayOptions, 2);
             //Begin the palette scroll view
             //This will only appear once there are too many prefabs to fit in the window
-            paletteScrollPosition = EditorGUILayout.BeginScrollView(paletteScrollPosition, GUILayout.ExpandHeight(true));
+            paletteScrollPosition = EditorGUILayout.BeginScrollView(paletteScrollPosition, GUILayout.ExpandHeight(true), GUILayout.MinHeight(500));
             int prefabIndex = 0;
             //Draw the list display mode
             if(selectedPaletteDisplayOption == 0){
@@ -228,19 +308,18 @@ namespace GridPlacer{
                     if(g == null)
                         continue;
                     GUILayout.BeginHorizontal();
-                    DrawPaletteAssetPreview(g);
+                    if(GUILayout.Button(AssetPreview.GetAssetPreview(g), GUILayout.Width(50.0f), GUILayout.Height(50.0f))){
+                        if(prefabPool.Contains(g))
+                            RemoveFromPool(g);
+                        else
+                            AddToPool(g);
+                    }
                     //If this prefab is selected it's label should be drawn in green
-                    if(selectedPrefab == g)
+                    if(prefabPool.Contains(g))
                         GUI.color = Color.green;
                     EditorGUILayout.LabelField(g.name, EditorStyles.boldLabel);
                     GUI.color = Color.white;
                     if(GUILayout.Button("X")){
-                        //When the remove button is clicked we wan't to remove the corresponding prefab from the palette
-                        if(selectedPrefab == g){
-                            //If this prefab is also the selected prefab we need to remove it's reference and destroy the scene preview
-                            selectedPrefab = null;
-                            DestroyImmediate(prefabScenePreview);
-                        }
                         prefabPalette.RemoveAt(prefabIndex);
                         break;
                     }
@@ -259,17 +338,16 @@ namespace GridPlacer{
                     rowCounter++;
 
                     GUILayout.BeginVertical();
-                    if(selectedPrefab == prefabPalette[i])
+                    if(prefabPool.Contains(prefabPalette[i]))
                         GUI.color = Color.green;
-                    DrawPaletteAssetPreview(prefabPalette[i]);
+                    if(GUILayout.Button(AssetPreview.GetAssetPreview(prefabPalette[i]), GUILayout.Width(50.0f), GUILayout.Height(50.0f))){
+                        if(prefabPool.Contains(prefabPalette[i]))
+                            RemoveFromPool(prefabPalette[i]);
+                        else
+                            AddToPool(prefabPalette[i]);
+                    }
                     GUI.color = Color.white;
                     if(GUILayout.Button("X")){
-                        //When the remove button is clicked we wan't to remove the corresponding prefab from the palette
-                        if(selectedPrefab == prefabPalette[i]){
-                            //If this prefab is also the selected prefab we need to remove it's reference and destroy the scene preview
-                            selectedPrefab = null;
-                            DestroyImmediate(prefabScenePreview);
-                        }
                         prefabPalette.RemoveAt(i);
                         break;
                     }
@@ -280,11 +358,15 @@ namespace GridPlacer{
                         rowCounter = 0;
                     }
                 }
+                if(rowCounter != 0)
+                    GUILayout.EndHorizontal();
             }
             EditorGUILayout.EndScrollView();
 
             RotatePrefab();
             SwitchSnappingMode();
+
+            EditorGUILayout.EndScrollView();
         }
 
         void DrawPaletteAssetPreview(GameObject g){
@@ -296,8 +378,6 @@ namespace GridPlacer{
         }
 
         void SelectPrefab(GameObject g, bool usePrefabInstantiation = true){
-            //When this button is clicked the corresponding prefab is selected
-            selectedPrefab = g;
             //Destroy the current scene view preview object
             if(prefabScenePreview)
                 DestroyImmediate(prefabScenePreview);
@@ -314,12 +394,12 @@ namespace GridPlacer{
             prefabScenePreview.name = g.name;
             //Set the scene previews rotation
             prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
+            //Disable all collider components to prevent the sampling ray from hitting the preview
+            foreach(Collider c in prefabScenePreview.GetComponentsInChildren<Collider>())
+                c.enabled = false;
             //These hideFlags prevent the preview object from showing up in the hierarchy.
             //It also won't be saved if for some reason it stays in the scene view and we lose it's reference
             prefabScenePreview.hideFlags = HideFlags.DontSave | HideFlags.HideInHierarchy;
-            //Everytime we click this button we wan't to switch to the GridPlacerTool
-            //This makes the transform gizmos disappear
-            ToolManager.SetActiveTool<GridPlacerTool>();
         }
 
         private void OnEnable() {
@@ -333,6 +413,10 @@ namespace GridPlacer{
             //Again using DestroyImmediate() instead of Destroy()
             if(ToolManager.activeToolType != typeof(GridPlacerTool))
                 DestroyImmediate(prefabScenePreview);
+            else{ //When this tool is entered the prefabScenePreview needs to be instantiated again
+                if(prefabPool.Count > 0)
+                    SelectPrefab(prefabPool[selectedPrefabIdx]);
+            }
         }
 
         private void OnFocus() {
@@ -366,6 +450,7 @@ namespace GridPlacer{
             //Draw the Grid Origin
             Handles.color = new Color(1.0f, 0.0f, 0.0f, 0.5f);
             Handles.SphereHandleCap(0, gridOrigin, Quaternion.identity, 0.5f, EventType.Repaint);
+            Handles.DrawLine(gridOrigin, gridOrigin + gridRotation * Vector3.up * 2.0f);
             //Draw Crosshair
             Matrix4x4 gridTransformation = Matrix4x4.TRS(gridOrigin, gridRotation, Vector3.one);
             Ray transformedScreenRay = TransformRay(screenRay, gridTransformation.inverse);
@@ -394,6 +479,10 @@ namespace GridPlacer{
                 Repaint();
             GUILayout.EndArea();
 
+            //If continuous sampling is possible sample every frame
+            if(samplingSetting == 1 && sampleContinuously)
+                Sample(screenRay);
+
             //Now we will catch some events
             //When the scroll wheel is moved we want to modify the current grid height
             if(current.type == EventType.ScrollWheel){
@@ -414,13 +503,13 @@ namespace GridPlacer{
             else if(current.type == EventType.MouseDown && current.button == 0){
                 //When the alt key was held down we want to sample the scene height
                 if(current.modifiers == EventModifiers.Alt){
-                    SampleHeight(screenRay);
+                    Sample(screenRay);
                     current.Use();
                 }
                 //Otherwise we will place our selected prefab
                 else{
                     //Of course we cannot do that if we don't have anything selected
-                    if(!selectedPrefab)
+                    if(prefabPool.Count == 0 || prefabScenePreview == null)
                         return;
                     //If the user wants the instance to be parented to a potential surface hit we need to retrieve that transform first
                     //so that the instance doesn't interfere with the Raycast
@@ -428,7 +517,7 @@ namespace GridPlacer{
                     if(parentToHit)
                         TryGetHitTransform(screenRay, out parent);
                     //We use InstantiatePrefab() again to maintain the prefab link, as explained before
-                    GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(selectedPrefab, parent);
+                    GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefabPool[selectedPrefabIdx], parent);
                     //We simply copy the scene preview object's properties as they are already exactly what we want
                     instance.name = prefabScenePreview.name;
                     instance.transform.position = prefabScenePreview.transform.position;
@@ -453,10 +542,13 @@ namespace GridPlacer{
                     Undo.RegisterCreatedObjectUndo(instance, "Place Prefab");
                     //Consume the event
                     current.Use();
+                    //Choose next prefab from pool
+                    SelectPrefabFromPool();
                 }
             }
 
             RotatePrefab();
+            CycleThroughPool();
             SwitchSnappingMode();
 
             //We need to repaint the scene view every frame else our grid handles won't update their positions
@@ -511,6 +603,25 @@ namespace GridPlacer{
                 }
                 //When the rotation settings have been updated we also need to update our scene preview object's rotation
                 UpdatePrefabScenePreviewRotation();
+            }
+        }
+        void CycleThroughPool(){
+            //Don't do anything if the pool is emtpy
+            if(prefabPool.Count == 0)
+                return;
+            Event current = Event.current;
+            if(current.type == EventType.KeyDown){
+                if(current.keyCode == KeyCode.R){
+                    //Advance and wrap around the selectedPrefabIdx
+                    if(current.modifiers == EventModifiers.Shift)
+                        selectedPrefabIdx = ((selectedPrefabIdx + prefabPool.Count - 1) % prefabPool.Count);
+                    else
+                        selectedPrefabIdx = ((selectedPrefabIdx + 1) % prefabPool.Count);
+                    //Select the prefab in the pool at the new index
+                    SelectPrefab(prefabPool[selectedPrefabIdx]);
+                    //Consume the even
+                    current.Use();
+                }
             }
         }
         void UpdatePrefabScenePreviewRotation(){
@@ -648,19 +759,28 @@ namespace GridPlacer{
 
         //To sample the scene height we can simply use a Phyics.Raycast call
         //Ofcourse this only works if the object you want to sample has a collider attached to it
-        private void SampleHeight(Ray cameraRay){
-            if(Physics.Raycast(cameraRay, out RaycastHit hit, Mathf.Infinity, ~0)){
+        private void Sample(Ray cameraRay){
+            if(Physics.Raycast(cameraRay, out RaycastHit hit, Mathf.Infinity, ~0, QueryTriggerInteraction.Ignore)){
                 switch(samplingSetting){
                     case 0: //Sample Height Offset
                         Vector3 gridToHit = (hit.point - gridOrigin) - Vector3.ProjectOnPlane(hit.point - gridOrigin, GridNormal);
                         gridHeight = gridToHit.magnitude * Mathf.Sign(Vector3.Dot(GridNormal, gridToHit));
                         break;
                     case 1: //Sample Origin Transform
-                        gridOrigin = hit.point;
-                        if(Mathf.Abs(Vector3.Dot(hit.normal, Vector3.forward)) > 0.5)
-                            gridRotation = Quaternion.LookRotation(Vector3.right, hit.normal);    
-                        else
-                            gridRotation = Quaternion.LookRotation(Vector3.forward, hit.normal);
+                        if(sampleOriginPosition)
+                            gridOrigin = hit.point;
+                        if(sampleOriginRotation){
+                            //Calculation a rotation from an arbitrary normal is a bit ugly
+                            Vector3 right;
+                            //Make sure that the normal isn't approximately equal to the forward vector
+                            //If we didn't do this check Quaternion.LookRotation would break in certain cases and return an identity quaternion
+                            if(Mathf.Abs(Vector3.Dot(hit.normal, Vector3.forward)) >= 0.9f)
+                                right = Vector3.Cross(hit.normal, Vector3.right).normalized;
+                            else
+                                right = Vector3.Cross(hit.normal, Vector3.forward).normalized;
+                            Vector3 forward = Vector3.Cross(hit.normal, right).normalized;
+                            gridRotation = Quaternion.LookRotation(forward, hit.normal);
+                        }
                         break;
                     case 2: //Sample Scene Prefab
                         //Find the first object up the hierarchy that possesses a renderer component
@@ -687,4 +807,4 @@ namespace GridPlacer{
         }
     }
 }
-#endif
+// #endif
