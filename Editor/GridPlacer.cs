@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// #if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
+#if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
 using UnityEditor;
 using UnityEditor.EditorTools;
 
@@ -807,4 +807,4 @@ namespace GridPlacer{
         }
     }
 }
-// #endif
+#endif
