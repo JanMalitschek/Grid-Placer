@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-#if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
+// #if UNITY_EDITOR //This absolutely shouldn't be here! This is why all of this is inside the Editor folder but Unity doesn't care, I guess
 using UnityEditor;
 using UnityEditor.EditorTools;
 
@@ -97,8 +97,10 @@ namespace GridPlacer{
             SelectPrefabFromPool();
         }
         private void SelectPrefabFromPool(){
-            if(prefabPool.Count == 0)
+            if(prefabPool.Count == 0){
                 DestroyImmediate(prefabScenePreview);
+                return;
+            }
             selectedPrefabIdx = Random.Range(0, prefabPool.Count);
             SelectPrefab(prefabPool[selectedPrefabIdx]);
         }
@@ -394,6 +396,8 @@ namespace GridPlacer{
             prefabScenePreview.name = g.name;
             //Set the scene previews rotation
             prefabScenePreview.transform.eulerAngles = new Vector3(0.0f, currentRotation, 0.0f);
+            //Set the scene previews scale
+            prefabScenePreview.transform.localScale = Vector3.one * currentScale;
             //Disable all collider components to prevent the sampling ray from hitting the preview
             foreach(Collider c in prefabScenePreview.GetComponentsInChildren<Collider>())
                 c.enabled = false;
@@ -807,4 +811,4 @@ namespace GridPlacer{
         }
     }
 }
-#endif
+// #endif
